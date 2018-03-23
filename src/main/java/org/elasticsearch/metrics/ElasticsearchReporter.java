@@ -66,7 +66,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
         private MetricFilter percolationFilter;
         private int timeout = 1000;
         private String timestampFieldname = "@timestamp";
-        private Map<String, Object> additionalFields;
+        private Map<String, ?> additionalFields;
 
         private Builder(MetricRegistry registry) {
             this.registry = registry;
@@ -191,7 +191,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
          * @param additionalFields
          * @return
          */
-        public Builder additionalFields(Map<String, Object> additionalFields) {
+        public Builder additionalFields(Map<String, ?> additionalFields) {
             this.additionalFields = additionalFields;
             return this;
         }
@@ -233,7 +233,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
 
     public ElasticsearchReporter(MetricRegistry registry, String[] hosts, int timeout,
                                  String index, String indexDateFormat, int bulkSize, Clock clock, String prefix, TimeUnit rateUnit, TimeUnit durationUnit,
-                                 MetricFilter filter, MetricFilter percolationFilter, Notifier percolationNotifier, String timestampFieldname, Map<String, Object> additionalFields) throws MalformedURLException {
+                                 MetricFilter filter, MetricFilter percolationFilter, Notifier percolationNotifier, String timestampFieldname, Map<String, ?> additionalFields) throws MalformedURLException {
         super(registry, "elasticsearch-reporter", filter, rateUnit, durationUnit);
         this.hosts = hosts;
         this.index = index;
