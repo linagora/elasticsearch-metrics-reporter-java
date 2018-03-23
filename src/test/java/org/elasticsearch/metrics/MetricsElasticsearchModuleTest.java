@@ -20,8 +20,7 @@ import static org.junit.Assert.*;
  * @author static-max
  *
  */
-public class ElasticsearchReporterTestTest {
-	
+public class MetricsElasticsearchModuleTest {
 	@Test
 	public void test() throws JsonProcessingException {
 		ObjectMapper objectMapper = new ObjectMapper();
