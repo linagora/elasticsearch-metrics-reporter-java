@@ -16,7 +16,7 @@ If you want to see this in action, go to the `samples/` directory and read the r
 
 |   Metrics-elasticsearch-reporter  |    elasticsearch    | Release date |
 |-----------------------------------|---------------------|:------------:|
-| 2.3.0-SNAPSHOT                    | 2.3.0  -> master    |  NONE        |
+| 2.3.0                             | 2.3.0  -> 5.x       |  NONE        |
 | 2.2.0                             | 2.2.0  -> 2.2.x     |  2016-02-10  |
 | 2.0                               | 1.0.0  -> 1.7.x     |  2014-02-16  |
 | 1.0                               | 0.90.7 -> 0.90.x    |  2014-02-05  |
