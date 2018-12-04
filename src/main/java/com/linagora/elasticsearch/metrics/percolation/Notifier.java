@@ -16,9 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.elasticsearch.metrics.percolation;
+package com.linagora.elasticsearch.metrics.percolation;
 
-import org.elasticsearch.metrics.JsonMetrics.JsonMetric;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonMetric;
 
 /**
  * A notifier interface, which is executed, in case a certain metric is matched on the percolation query
