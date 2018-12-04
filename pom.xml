@@ -8,7 +8,7 @@
     <properties>
         <lucene.version>5.5.0</lucene.version>
         <elasticsearch.version>2.3.1</elasticsearch.version>
-        <jackson.version>2.7.3</jackson.version>
+        <jackson.version>2.9.6</jackson.version>
         <randomized.testrunner.version>2.3.3</randomized.testrunner.version>
     </properties>
 
@@ -84,7 +84,7 @@
         <dependency>
             <groupId>io.dropwizard.metrics</groupId>
             <artifactId>metrics-core</artifactId>
-            <version>3.1.2</version>
+            <version>3.2.6</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
