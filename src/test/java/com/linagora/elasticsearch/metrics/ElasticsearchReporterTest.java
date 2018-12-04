@@ -355,10 +355,10 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     private class SimpleNotifier implements Notifier {
 
-        public Map<String, JsonMetrics.JsonMetric> metrics = new HashMap<>();
+        public Map<String, JsonMetrics.JsonMetric<? extends Metric>> metrics = new HashMap<>();
 
         @Override
-        public void notify(JsonMetrics.JsonMetric jsonMetric, String match) {
+        public void notify(JsonMetrics.JsonMetric<? extends Metric> jsonMetric, String match) {
             metrics.put(match, jsonMetric);
         }
     }

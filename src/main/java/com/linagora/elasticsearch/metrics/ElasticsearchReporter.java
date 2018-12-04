@@ -265,6 +265,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
         checkForIndexTemplate();
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
     @Override
     public void report(SortedMap<String, Gauge> gauges,
                        SortedMap<String, Counter> counters,
@@ -295,12 +296,12 @@ public class ElasticsearchReporter extends ScheduledReporter {
                 return;
             }
 
-            List<JsonMetric> percolationMetrics = new ArrayList<>();
+            List<JsonMetric<? extends Metric>> percolationMetrics = new ArrayList<>();
             AtomicInteger entriesWritten = new AtomicInteger(0);
 
             for (Map.Entry<String, Gauge> entry : gauges.entrySet()) {
                 if (entry.getValue().getValue() != null) {
-                    JsonMetric jsonMetric = new JsonGauge(name(prefix, entry.getKey()), timestamp, entry.getValue());
+                    JsonMetric<? extends Metric> jsonMetric = new JsonGauge(name(prefix, entry.getKey()), timestamp, entry.getValue());
                     connection = writeJsonMetricAndRecreateConnectionIfNeeded(jsonMetric, connection, entriesWritten);
                     addJsonMetricToPercolationIfMatching(jsonMetric, percolationMetrics);
                 }
@@ -350,7 +351,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
     /**
      * Execute a percolation request for the specified metric
      */
-    private List<String> getPercolationMatches(JsonMetric jsonMetric) throws IOException {
+    private List<String> getPercolationMatches(JsonMetric<? extends Metric> jsonMetric) throws IOException {
         HttpURLConnection connection = openConnection("/" + currentIndexName + "/" + jsonMetric.type() + "/_percolate", "POST");
         if (connection == null) {
             LOGGER.error("Could not connect to any configured elasticsearch instances for percolation: {}", Arrays.asList(hosts));
@@ -369,6 +370,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
         Map<String, Object> input = objectMapper.readValue(connection.getInputStream(), new TypeReference<Map<String, Object>>() {});
         List<String> matches = new ArrayList<>();
         if (input.containsKey("matches") && input.get("matches") instanceof List) {
+            @SuppressWarnings("unchecked")
             List<Map<String, String>> foundMatches = (List<Map<String, String>>) input.get("matches");
             for (Map<String, String> entry : foundMatches) {
                 if (entry.containsKey("_id")) {
@@ -383,13 +385,13 @@ public class ElasticsearchReporter extends ScheduledReporter {
     /**
      * Add metric to list of matched percolation if needed
      */
-    private void addJsonMetricToPercolationIfMatching(JsonMetric<? extends Metric> jsonMetric, List<JsonMetric> percolationMetrics) {
+    private void addJsonMetricToPercolationIfMatching(JsonMetric<? extends Metric> jsonMetric, List<JsonMetric<? extends Metric>> percolationMetrics) {
         if (percolationFilter != null && percolationFilter.matches(jsonMetric.name(), jsonMetric.value())) {
             percolationMetrics.add(jsonMetric);
         }
     }
 
-    private HttpURLConnection writeJsonMetricAndRecreateConnectionIfNeeded(JsonMetric jsonMetric, HttpURLConnection connection,
+    private HttpURLConnection writeJsonMetricAndRecreateConnectionIfNeeded(JsonMetric<? extends Metric> jsonMetric, HttpURLConnection connection,
                                                                            AtomicInteger entriesWritten) throws IOException {
         writeJsonMetric(jsonMetric, writer, connection.getOutputStream());
         return createNewConnectionIfBulkSizeReached(connection, entriesWritten.incrementAndGet());
@@ -422,7 +424,7 @@ public class ElasticsearchReporter extends ScheduledReporter {
     /**
      * serialize a JSON metric over the outputstream in a bulk request
      */
-    private void writeJsonMetric(JsonMetric jsonMetric, ObjectWriter writer, OutputStream out) throws IOException {
+    private void writeJsonMetric(JsonMetric<? extends Metric> jsonMetric, ObjectWriter writer, OutputStream out) throws IOException {
         writer.writeValue(out, new BulkIndexOperationHeader(currentIndexName, jsonMetric.type()));
         out.write("\n".getBytes());
         writer.writeValue(out, jsonMetric);
