@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.elasticsearch.metrics;
+package com.linagora.elasticsearch.metrics;
 
 import com.codahale.metrics.*;
 import java.util.Date;

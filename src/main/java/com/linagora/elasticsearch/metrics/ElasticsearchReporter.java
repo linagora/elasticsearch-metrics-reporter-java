@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.elasticsearch.metrics;
+package com.linagora.elasticsearch.metrics;
 
 import com.codahale.metrics.*;
 import com.codahale.metrics.Timer;
@@ -27,7 +27,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
-import org.elasticsearch.metrics.percolation.Notifier;
+import com.linagora.elasticsearch.metrics.percolation.Notifier;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,8 +43,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static org.elasticsearch.metrics.JsonMetrics.*;
-import static org.elasticsearch.metrics.MetricsElasticsearchModule.BulkIndexOperationHeader;
+import static com.linagora.elasticsearch.metrics.JsonMetrics.*;
+import static com.linagora.elasticsearch.metrics.MetricsElasticsearchModule.BulkIndexOperationHeader;
 
 public class ElasticsearchReporter extends ScheduledReporter {
 
