@@ -62,10 +62,10 @@ public class JsonMetrics {
         public abstract String type();
     }
 
-    public static class JsonGauge extends JsonMetric<Gauge> {
+    public static class JsonGauge extends JsonMetric<Gauge<?>> {
         private static final String TYPE = "gauge";
 
-        public JsonGauge(String name, long timestamp, Gauge value) {
+        public JsonGauge(String name, long timestamp, Gauge<?> value) {
             super(name, timestamp, value);
         }
 

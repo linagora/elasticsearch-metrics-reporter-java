@@ -18,6 +18,7 @@
  */
 package com.linagora.elasticsearch.metrics.percolation;
 
+import com.codahale.metrics.Metric;
 import com.linagora.elasticsearch.metrics.JsonMetrics.JsonMetric;
 
 /**
@@ -30,6 +31,6 @@ public interface Notifier {
      * @param jsonMetric The json metric, which matched the percolation
      * @param matchedId  The name of the percolation id, that matched
      */
-    void notify(JsonMetric jsonMetric, String matchedId);
+    void notify(JsonMetric<? extends Metric> jsonMetric, String matchedId);
 
 }
