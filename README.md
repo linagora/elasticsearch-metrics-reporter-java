@@ -1,8 +1,7 @@
 # Metrics Elasticsearch Reporter
 
-![Project unmaintained](https://img.shields.io/badge/project-unmaintained-red.svg)
-
-**This project is no longer maintained. If you want to maintain it, please fork and we will link to your new repository.**
+This project is a fork of https://github.com/elastic/elasticsearch-metrics-reporter-java with several commits taken from https://github.com/nerdynick/elasticsearch-metrics-reporter-java/commits/master
+The goal of this project is to be able to release a new version of the reporter, compatible with Elasticsearch 6.x and to be able to use it in maven.
 
 ## Introduction
 
@@ -16,7 +15,7 @@ If you want to see this in action, go to the `samples/` directory and read the r
 
 |   Metrics-elasticsearch-reporter  |    elasticsearch    | Release date |
 |-----------------------------------|---------------------|:------------:|
-| 6.0.0-SNAPSHOT                    | 6.x                 |  NONE        |
+| 6.0.0-SNAPSHOT                    | 2.3.0  -> 6.x       |  NONE        |
 | 2.3.0                             | 2.3.0  -> 5.x       |  NONE        |
 | 2.2.0                             | 2.2.0  -> 2.2.x     |  2016-02-10  |
 | 2.0                               | 1.0.0  -> 1.7.x     |  2014-02-16  |
@@ -24,7 +23,7 @@ If you want to see this in action, go to the `samples/` directory and read the r
 
 ## Travis CI build status
 
-[![Build status](https://api.travis-ci.org/elastic/elasticsearch-metrics-reporter-java.svg?branch=master)](https://travis-ci.org/elastic/elasticsearch-metrics-reporter-java)
+[![Build status](https://api.travis-ci.org/linagora/elasticsearch-metrics-reporter-java.svg?branch=master)](https://travis-ci.org/linagora/elasticsearch-metrics-reporter-java)
 
 ## Installation
 

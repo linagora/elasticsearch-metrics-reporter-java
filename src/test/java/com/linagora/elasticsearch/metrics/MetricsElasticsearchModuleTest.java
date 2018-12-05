@@ -1,17 +1,18 @@
-package org.elasticsearch.metrics;
+package com.linagora.elasticsearch.metrics;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import org.elasticsearch.metrics.JsonMetrics.JsonGauge;
-import org.elasticsearch.metrics.JsonMetrics.JsonMetric;
 import org.junit.Test;
 
 import com.codahale.metrics.Gauge;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.linagora.elasticsearch.metrics.MetricsElasticsearchModule;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonGauge;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonMetric;
 
 import static org.junit.Assert.*;
 

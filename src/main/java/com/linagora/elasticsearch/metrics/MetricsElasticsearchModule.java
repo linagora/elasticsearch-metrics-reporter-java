@@ -16,19 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.elasticsearch.metrics;
+package com.linagora.elasticsearch.metrics;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import org.elasticsearch.metrics.JsonMetrics.JsonCounter;
-import org.elasticsearch.metrics.JsonMetrics.JsonGauge;
-import org.elasticsearch.metrics.JsonMetrics.JsonHistogram;
-import org.elasticsearch.metrics.JsonMetrics.JsonMeter;
-import org.elasticsearch.metrics.JsonMetrics.JsonTimer;
 
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
@@ -41,6 +35,11 @@ import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleSerializers;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonCounter;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonGauge;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonHistogram;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonMeter;
+import com.linagora.elasticsearch.metrics.JsonMetrics.JsonTimer;
 
 public class MetricsElasticsearchModule extends Module {
 
