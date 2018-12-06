@@ -19,9 +19,9 @@
     <inceptionYear>2013</inceptionYear>
 
     <scm>
-        <connection>scm:git:git@github.com:elasticsearch/elasticsearch-metrics-reporter-java.git</connection>
-        <developerConnection>scm:git:git@github.com:elasticsearch/elasticsearch-metrics-reporter-java.git</developerConnection>
-        <url>http://github.com/elasticsearch/elasticsearch-metrics-reporter</url>
+        <connection>scm:git:git@github.com:linagora/elasticsearch-metrics-reporter-java.git</connection>
+        <developerConnection>scm:git:git@github.com:linagora/elasticsearch-metrics-reporter-java.git</developerConnection>
+        <url>http://github.com/linagora/elasticsearch-metrics-reporter</url>
     </scm>
 
     <licenses>
