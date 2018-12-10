@@ -25,6 +25,7 @@ import static org.elasticsearch.common.settings.Settings.settingsBuilder;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 
@@ -237,13 +238,18 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     }
 
     @Test
-    public void nullGaugeShouldNotBeReported() {
+    public void nullGaugeShouldBeReported() {
         registry.register(name("foo", "bar"), (Gauge<Integer>) () -> null);
+        reportAndRefresh();
 
-        elasticsearchReporter.report();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
+        assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        assertThatThrownBy(() -> client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet())
-            .isInstanceOf(IndexNotFoundException.class);
+        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+        assertTimestamp(hit);
+        assertKey(hit, "name", prefix + ".foo.bar");
+        assertNullKey(hit, "value");
+        assertKey(hit, "host", "localhost");
     }
 
     @Test
@@ -380,6 +386,11 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     private void assertKey(Map<String, Object> hit, String key, String value) {
         assertThat(hit, hasKey(key));
         assertThat(hit.get(key).toString(), is(value));
+    }
+
+    private void assertNullKey(Map<String, Object> hit, String key) {
+        assertThat(hit, hasKey(key));
+        assertThat(hit.get(key), nullValue());
     }
 
     private void assertTimestamp(Map<String, Object> hit) {
