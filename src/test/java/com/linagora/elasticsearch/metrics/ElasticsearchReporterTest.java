@@ -20,7 +20,6 @@ package com.linagora.elasticsearch.metrics;
 
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.elasticsearch.common.settings.Settings.settingsBuilder;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -47,7 +46,6 @@ import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.http.HttpServerTransport;
-import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.node.Node;
@@ -249,6 +247,24 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         assertTimestamp(hit);
         assertKey(hit, "name", prefix + ".foo.bar");
         assertNullKey(hit, "value");
+        assertKey(hit, "host", "localhost");
+    }
+
+    @Test
+    public void failingGaugeShouldIndexTheError() {
+        registry.register(name("foo", "failing"), (Gauge<Integer>) () -> {
+            throw new RuntimeException("oups");
+        });
+
+        reportAndRefresh();
+
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
+        assertThat(searchResponse.getHits().totalHits(), is(1L));
+
+        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+        assertTimestamp(hit);
+        assertKey(hit, "name", prefix + ".foo.failing");
+        assertKey(hit, "error", "java.lang.RuntimeException: oups");
         assertKey(hit, "host", "localhost");
     }
 
