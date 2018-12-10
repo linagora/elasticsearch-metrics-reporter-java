@@ -237,6 +237,16 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     }
 
     @Test
+    public void nullGaugeShouldNotBeReported() {
+        registry.register(name("foo", "bar"), (Gauge<Integer>) () -> null);
+
+        elasticsearchReporter.report();
+
+        assertThatThrownBy(() -> client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet())
+            .isInstanceOf(IndexNotFoundException.class);
+    }
+
+    @Test
     public void testThatSpecifyingSeveralHostsWork() throws Exception {
         elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000", "localhost:" + getPortOfRunningNode()).build();
 
