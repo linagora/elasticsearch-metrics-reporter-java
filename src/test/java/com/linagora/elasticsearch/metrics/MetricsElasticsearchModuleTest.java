@@ -1,20 +1,19 @@
 package com.linagora.elasticsearch.metrics;
 
-import java.util.HashSet;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
 import com.codahale.metrics.Gauge;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.linagora.elasticsearch.metrics.MetricsElasticsearchModule;
+import com.google.common.collect.ImmutableSet;
 import com.linagora.elasticsearch.metrics.JsonMetrics.JsonGauge;
 import com.linagora.elasticsearch.metrics.JsonMetrics.JsonMetric;
-
-import static org.junit.Assert.*;
 
 /**
  * Tests if value is an array.
@@ -23,30 +22,16 @@ import static org.junit.Assert.*;
  */
 public class MetricsElasticsearchModuleTest {
 	@Test
-	public void test() throws JsonProcessingException {
+	public void test() {
 		ObjectMapper objectMapper = new ObjectMapper();
 		objectMapper.registerModule(new MetricsElasticsearchModule(TimeUnit.MINUTES, TimeUnit.MINUTES, "@timestamp", null));
 		
-		Gauge<String> gaugeString = new Gauge<String>() {
-			@Override
-			public String getValue() {
-				return "STRING VALUE";
-			}
-		};
+		Gauge<String> gaugeString = () -> "STRING VALUE";
 		
 		/**
 		 * Used for deadlocks in metrics-jvm ThreadStatesGaugeSet.class.
 		 */
-		Gauge<Set<String>> gaugeStringSet = new Gauge<Set<String>>() {
-			@Override
-			public Set<String> getValue() {
-				HashSet<String> testSet = new HashSet<>();
-				testSet.add("1");
-				testSet.add("2");
-				testSet.add("3");
-				return testSet;
-			}
-		};
+		Gauge<Set<String>> gaugeStringSet = () -> ImmutableSet.of("1", "2", "3");
 		
 		
 		JsonMetric<?> jsonMetricString = new JsonGauge("string", Long.MAX_VALUE, gaugeString);

@@ -1,34 +1,38 @@
 /*
  * Licensed to Elasticsearch under one
- * or more contributor license agreements.  See the NOTICE file
+ * or more contributor license agreements. See the NOTICE file
  * distributed with this work for additional information
- * regarding copyright ownership. ElasticSearch licenses this
+ * regarding copyright ownership.ElasticSearch licenses this
  * file to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+ * with the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 package com.linagora.elasticsearch.metrics;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Gauge;
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.Metric;
-import com.codahale.metrics.MetricFilter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
-import com.linagora.elasticsearch.metrics.ElasticsearchReporter;
-import com.linagora.elasticsearch.metrics.JsonMetrics;
-import com.linagora.elasticsearch.metrics.percolation.Notifier;
+
+import static com.codahale.metrics.MetricRegistry.name;
+import static org.elasticsearch.common.settings.Settings.settingsBuilder;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.hasSize;
+
+import java.io.IOException;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
@@ -50,19 +54,15 @@ import org.joda.time.format.ISODateTimeFormat;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
-import static com.codahale.metrics.MetricRegistry.name;
-import static org.elasticsearch.common.settings.Settings.settingsBuilder;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.hasSize;
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.Metric;
+import com.codahale.metrics.MetricFilter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+import com.linagora.elasticsearch.metrics.percolation.Notifier;
 
 public class ElasticsearchReporterTest extends ESIntegTestCase {
 
@@ -86,7 +86,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     }
 
     @Test
-    public void testThatTemplateIsAdded() throws Exception {
+    public void testThatTemplateIsAdded() {
         GetIndexTemplatesResponse response = client().admin().indices().prepareGetTemplates("metrics_template").get();
 
         assertThat(response.getIndexTemplates(), hasSize(1));
@@ -100,7 +100,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         registry.counter(name("test", "cache-evictions")).inc();
         reportAndRefresh();
 
-        // somehow the cluster state is not immediately updated... need to check
+        // somehow the cluster state is not immediately updated...need to check
         Thread.sleep(200);
         ClusterStateResponse clusterStateResponse = client().admin().cluster().prepareState().setRoutingTable(false)
                 .setLocal(false)
@@ -145,17 +145,17 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         registry.counter(name("test", "cache-evictions")).inc();
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(index). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(index).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
     }
 
     @Test
-    public void testCounter() throws Exception {
-        final Counter evictions = registry.counter(name("test", "cache-evictions"));
+    public void testCounter() {
+        Counter evictions = registry.counter(name("test", "cache-evictions"));
         evictions.inc(25);
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
 
         Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
@@ -167,12 +167,12 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testHistogram() {
-        final Histogram histogram = registry.histogram(name("foo", "bar"));
+        Histogram histogram = registry.histogram(name("foo", "bar"));
         histogram.update(20);
         histogram.update(40);
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
 
         Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
@@ -187,12 +187,12 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testMeter() {
-        final Meter meter = registry.meter(name("foo", "bar"));
+        Meter meter = registry.meter(name("foo", "bar"));
         meter.mark(10);
         meter.mark(20);
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
 
         Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
@@ -204,13 +204,13 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testTimer() throws Exception {
-        final Timer timer = registry.timer(name("foo", "bar"));
-        final Timer.Context timerContext = timer.time();
+        Timer timer = registry.timer(name("foo", "bar"));
+        Timer.Context timerContext = timer.time();
         Thread.sleep(200);
         timerContext.stop();
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
 
         Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
@@ -221,16 +221,11 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     }
 
     @Test
-    public void testGauge() throws Exception {
-        registry.register(name("foo", "bar"), new Gauge<Integer>() {
-            @Override
-            public Integer getValue() {
-                return 1234;
-            }
-        });
+    public void testGauge() {
+        registry.register(name("foo", "bar"), (Gauge<Integer>) () -> 1234);
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
 
         Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
@@ -241,13 +236,46 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     }
 
     @Test
+    public void nullGaugeShouldBeReported() {
+        registry.register(name("foo", "bar"), (Gauge<Integer>) () -> null);
+        reportAndRefresh();
+
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
+        assertThat(searchResponse.getHits().totalHits(), is(1L));
+
+        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+        assertTimestamp(hit);
+        assertKey(hit, "name", prefix + ".foo.bar");
+        assertNullKey(hit, "value");
+        assertKey(hit, "host", "localhost");
+    }
+
+    @Test
+    public void failingGaugeShouldIndexTheError() {
+        registry.register(name("foo", "failing"), (Gauge<Integer>) () -> {
+            throw new RuntimeException("oups");
+        });
+
+        reportAndRefresh();
+
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
+        assertThat(searchResponse.getHits().totalHits(), is(1L));
+
+        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+        assertTimestamp(hit);
+        assertKey(hit, "name", prefix + ".foo.failing");
+        assertKey(hit, "error", "java.lang.RuntimeException: oups");
+        assertKey(hit, "host", "localhost");
+    }
+
+    @Test
     public void testThatSpecifyingSeveralHostsWork() throws Exception {
         elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000", "localhost:" + getPortOfRunningNode()).build();
 
         registry.counter(name("test", "cache-evictions")).inc();
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
     }
 
@@ -262,31 +290,26 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     @Test
     public void testThatBulkIndexingWorks() {
         for (int i = 0; i < 2020; i++) {
-            final Counter evictions = registry.counter(name("foo", "bar", String.valueOf(i)));
+            Counter evictions = registry.counter(name("foo", "bar", String.valueOf(i)));
             evictions.inc(i);
         }
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(2020L));
     }
 
     @Test
-    public void testThatPercolationNotificationWorks() throws IOException, InterruptedException {
+    public void testThatPercolationNotificationWorks() throws IOException {
         SimpleNotifier notifier = new SimpleNotifier();
 
-        MetricFilter percolationFilter = new MetricFilter() {
-            @Override
-            public boolean matches(String name, Metric metric) {
-                return name.startsWith(prefix + ".foo");
-            }
-        };
+        MetricFilter percolationFilter = (name, metric) -> name.startsWith(prefix + ".foo");
         elasticsearchReporter = createElasticsearchReporterBuilder()
                 .percolationFilter(percolationFilter)
                 .percolationNotifier(notifier)
                 .build();
 
-        final Counter evictions = registry.counter("foo");
+        Counter evictions = registry.counter("foo");
         evictions.inc(18);
         reportAndRefresh();
 
@@ -328,7 +351,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         registry.counter(name("myMetrics", "cache-evictions")).inc();
         reportAndRefresh();
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate). setTypes("metrics").execute().actionGet();
+        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
         assertThat(searchResponse.getHits().totalHits(), is(1L));
 
         Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
@@ -336,7 +359,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     }
 
     @Test // issue #6
-    public void testThatEmptyMetricsDoNotResultInBrokenBulkRequest() throws Exception {
+    public void testThatEmptyMetricsDoNotResultInBrokenBulkRequest() {
         long connectionsBeforeReporting = getTotalHttpConnections();
         elasticsearchReporter.report();
         long connectionsAfterReporting = getTotalHttpConnections();
@@ -379,6 +402,11 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     private void assertKey(Map<String, Object> hit, String key, String value) {
         assertThat(hit, hasKey(key));
         assertThat(hit.get(key).toString(), is(value));
+    }
+
+    private void assertNullKey(Map<String, Object> hit, String key) {
+        assertThat(hit, hasKey(key));
+        assertThat(hit.get(key), nullValue());
     }
 
     private void assertTimestamp(Map<String, Object> hit) {

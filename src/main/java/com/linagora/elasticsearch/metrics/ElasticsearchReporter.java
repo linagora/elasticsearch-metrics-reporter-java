@@ -300,11 +300,9 @@ public class ElasticsearchReporter extends ScheduledReporter {
             AtomicInteger entriesWritten = new AtomicInteger(0);
 
             for (Map.Entry<String, Gauge> entry : gauges.entrySet()) {
-                if (entry.getValue().getValue() != null) {
-                    JsonMetric<? extends Metric> jsonMetric = new JsonGauge(name(prefix, entry.getKey()), timestamp, entry.getValue());
-                    connection = writeJsonMetricAndRecreateConnectionIfNeeded(jsonMetric, connection, entriesWritten);
-                    addJsonMetricToPercolationIfMatching(jsonMetric, percolationMetrics);
-                }
+                JsonMetric<? extends Metric> jsonMetric = new JsonGauge(name(prefix, entry.getKey()), timestamp, entry.getValue());
+                connection = writeJsonMetricAndRecreateConnectionIfNeeded(jsonMetric, connection, entriesWritten);
+                addJsonMetricToPercolationIfMatching(jsonMetric, percolationMetrics);
             }
 
             for (Map.Entry<String, Counter> entry : counters.entrySet()) {
