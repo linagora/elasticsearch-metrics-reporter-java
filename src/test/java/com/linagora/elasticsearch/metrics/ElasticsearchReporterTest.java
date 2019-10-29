@@ -51,6 +51,7 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.joda.time.format.ISODateTimeFormat;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -83,6 +84,11 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     @Before
     public void setup() throws IOException {
         elasticsearchReporter = createElasticsearchReporterBuilder().build();
+    }
+
+    @After
+    public void cleanup() {
+        elasticsearchReporter.close();
     }
 
     @Test
@@ -127,7 +133,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     @Test
     public void testThatTemplateIsNotOverWritten() throws Exception {
         client().admin().indices().preparePutTemplate("metrics_template").setTemplate("foo*").setSettings("{ \"index.number_of_shards\" : \"1\"}").execute().actionGet();
-
+        elasticsearchReporter.close();
         elasticsearchReporter = createElasticsearchReporterBuilder().build();
 
         GetIndexTemplatesResponse response = client().admin().indices().prepareGetTemplates("metrics_template").get();
@@ -139,6 +145,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testThatTimeBasedIndicesCanBeDisabled() throws Exception {
+        elasticsearchReporter.close();
         elasticsearchReporter = createElasticsearchReporterBuilder().indexDateFormat("").build();
         indexWithDate = index;
 
@@ -270,6 +277,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testThatSpecifyingSeveralHostsWork() throws Exception {
+        elasticsearchReporter.close();
         elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000", "localhost:" + getPortOfRunningNode()).build();
 
         registry.counter(name("test", "cache-evictions")).inc();
@@ -281,6 +289,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testGracefulFailureIfNoHostIsReachable() throws IOException {
+        elasticsearchReporter.close();
         // if no exception is thrown during the test, we consider it all graceful, as we connected to a dead host
         elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000").build();
         registry.counter(name("test", "cache-evictions")).inc();
@@ -304,6 +313,7 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         SimpleNotifier notifier = new SimpleNotifier();
 
         MetricFilter percolationFilter = (name, metric) -> name.startsWith(prefix + ".foo");
+        elasticsearchReporter.close();
         elasticsearchReporter = createElasticsearchReporterBuilder()
                 .percolationFilter(percolationFilter)
                 .percolationNotifier(notifier)
@@ -341,12 +351,14 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testThatWronglyConfiguredHostDoesNotLeadToApplicationStop() throws IOException {
+        elasticsearchReporter.close();
         createElasticsearchReporterBuilder().hosts("dafuq/1234").build();
         elasticsearchReporter.report();
     }
 
     @Test
     public void testThatTimestampFieldnameCanBeConfigured() throws Exception {
+        elasticsearchReporter.close();
         elasticsearchReporter = createElasticsearchReporterBuilder().timestampFieldname("myTimeStampField").build();
         registry.counter(name("myMetrics", "cache-evictions")).inc();
         reportAndRefresh();
