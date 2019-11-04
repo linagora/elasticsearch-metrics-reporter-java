@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.action.admin.cluster.node.stats.NodeStats;
 import org.elasticsearch.action.admin.cluster.node.stats.NodesStatsResponse;
 import org.elasticsearch.action.admin.cluster.state.ClusterStateResponse;
@@ -45,13 +46,13 @@ import org.elasticsearch.cluster.metadata.IndexTemplateMetaData;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.http.HttpServerTransport;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.test.ESIntegTestCase;
 import org.joda.time.format.ISODateTimeFormat;
-import org.junit.Before;
 import org.junit.Test;
 
 import com.codahale.metrics.Counter;
@@ -66,7 +67,8 @@ import com.linagora.elasticsearch.metrics.percolation.Notifier;
 
 public class ElasticsearchReporterTest extends ESIntegTestCase {
 
-    private ElasticsearchReporter elasticsearchReporter;
+    private static final TimeValue TIMEOUT = TimeValue.timeValueMillis(1000L);
+
     private MetricRegistry registry = new MetricRegistry();
     private String index = randomAsciiOfLength(12).toLowerCase();
     private String indexWithDate = String.format("%s-%s-%02d", index, Calendar.getInstance().get(Calendar.YEAR), Calendar.getInstance().get(Calendar.MONTH) + 1);
@@ -75,46 +77,43 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
     @Override
     protected Settings nodeSettings(int nodeOrdinal) {
         return settingsBuilder()
-                .put(super.nodeSettings(nodeOrdinal))
-                .put(Node.HTTP_ENABLED, true)
-                .build();
+            .put(super.nodeSettings(nodeOrdinal))
+            .put(Node.HTTP_ENABLED, true)
+            .build();
     }
 
-    @Before
-    public void setup() throws IOException {
-        elasticsearchReporter = createElasticsearchReporterBuilder().build();
-    }
 
     @Test
-    public void testThatTemplateIsAdded() {
-        GetIndexTemplatesResponse response = client().admin().indices().prepareGetTemplates("metrics_template").get();
+    public void testThatTemplateIsAdded() throws IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            GetIndexTemplatesResponse response = client().admin().indices().prepareGetTemplates("metrics_template").get(TIMEOUT);
 
-        assertThat(response.getIndexTemplates(), hasSize(1));
-        IndexTemplateMetaData templateData = response.getIndexTemplates().get(0);
-        assertThat(templateData.order(), is(0));
-        assertThat(templateData.getMappings().get("_default_"), is(notNullValue()));
+            assertThat(response.getIndexTemplates(), hasSize(1));
+            IndexTemplateMetaData templateData = response.getIndexTemplates().get(0);
+            assertThat(templateData.order(), is(0));
+            assertThat(templateData.getMappings().get("_default_"), is(notNullValue()));
+        }
     }
 
     @Test
     public void testThatMappingFromTemplateIsApplied() throws Exception {
-        registry.counter(name("test", "cache-evictions")).inc();
-        reportAndRefresh();
-
-        // somehow the cluster state is not immediately updated...need to check
-        Thread.sleep(200);
-        ClusterStateResponse clusterStateResponse = client().admin().cluster().prepareState().setRoutingTable(false)
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            registry.counter(name("test", "cache-evictions")).inc();
+            reportAndRefresh(elasticsearchReporter);
+            ClusterStateResponse clusterStateResponse = client().admin().cluster().prepareState().setRoutingTable(false)
                 .setLocal(false)
                 .setNodes(true)
                 .setIndices(indexWithDate)
-                .execute().actionGet();
+                .execute().actionGet(TIMEOUT);
 
-        assertThat(clusterStateResponse.getState().getMetaData().getIndices().containsKey(indexWithDate), is(true));
-        IndexMetaData indexMetaData = clusterStateResponse.getState().getMetaData().getIndices().get(indexWithDate);
-        assertThat(indexMetaData.getMappings().containsKey("metrics"), is(true));
-        Map<String, Object> properties = getAsMap(indexMetaData.mapping("metrics").sourceAsMap(), "properties");
-        Map<String, Object> mapping = getAsMap(properties, "name");
-        assertThat(mapping, hasKey("index"));
-        assertThat(mapping.get("index").toString(), is("not_analyzed"));
+            assertThat(clusterStateResponse.getState().getMetaData().getIndices().containsKey(indexWithDate), is(true));
+            IndexMetaData indexMetaData = clusterStateResponse.getState().getMetaData().getIndices().get(indexWithDate);
+            assertThat(indexMetaData.getMappings().containsKey("metrics"), is(true));
+            Map<String, Object> properties = getAsMap(indexMetaData.mapping("metrics").sourceAsMap(), "properties");
+            Map<String, Object> mapping = getAsMap(properties, "name");
+            assertThat(mapping, hasKey("index"));
+            assertThat(mapping.get("index").toString(), is("not_analyzed"));
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -126,249 +125,277 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
 
     @Test
     public void testThatTemplateIsNotOverWritten() throws Exception {
-        client().admin().indices().preparePutTemplate("metrics_template").setTemplate("foo*").setSettings("{ \"index.number_of_shards\" : \"1\"}").execute().actionGet();
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            client().admin().indices().preparePutTemplate("metrics_template").setTemplate("foo*").setSettings("{ \"index.number_of_shards\" : \"1\"}").execute().actionGet(TIMEOUT);
 
-        elasticsearchReporter = createElasticsearchReporterBuilder().build();
+            GetIndexTemplatesResponse response = client().admin().indices().prepareGetTemplates("metrics_template").get(TIMEOUT);
 
-        GetIndexTemplatesResponse response = client().admin().indices().prepareGetTemplates("metrics_template").get();
-
-        assertThat(response.getIndexTemplates(), hasSize(1));
-        IndexTemplateMetaData templateData = response.getIndexTemplates().get(0);
-        assertThat(templateData.template(), is("foo*"));
+            assertThat(response.getIndexTemplates(), hasSize(1));
+            IndexTemplateMetaData templateData = response.getIndexTemplates().get(0);
+            assertThat(templateData.template(), is("foo*"));
+        }
     }
+
 
     @Test
     public void testThatTimeBasedIndicesCanBeDisabled() throws Exception {
-        elasticsearchReporter = createElasticsearchReporterBuilder().indexDateFormat("").build();
-        indexWithDate = index;
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().indexDateFormat("").build()) {
+            indexWithDate = index;
 
-        registry.counter(name("test", "cache-evictions")).inc();
-        reportAndRefresh();
+            registry.counter(name("test", "cache-evictions")).inc();
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(index).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(index).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
+        }
     }
 
     @Test
-    public void testCounter() {
-        Counter evictions = registry.counter(name("test", "cache-evictions"));
-        evictions.inc(25);
-        reportAndRefresh();
+    public void testCounter() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            Counter evictions = registry.counter(name("test", "cache-evictions"));
+            evictions.inc(25);
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "count", 25);
-        assertKey(hit, "name", prefix + ".test.cache-evictions");
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "count", 25);
+            assertKey(hit, "name", prefix + ".test.cache-evictions");
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
-    public void testHistogram() {
-        Histogram histogram = registry.histogram(name("foo", "bar"));
-        histogram.update(20);
-        histogram.update(40);
-        reportAndRefresh();
+    public void testHistogram() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            Histogram histogram = registry.histogram(name("foo", "bar"));
+            histogram.update(20);
+            histogram.update(40);
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "name", prefix + ".foo.bar");
-        assertKey(hit, "count", 2);
-        assertKey(hit, "max", 40);
-        assertKey(hit, "min", 20);
-        assertKey(hit, "mean", 30.0);
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "name", prefix + ".foo.bar");
+            assertKey(hit, "count", 2);
+            assertKey(hit, "max", 40);
+            assertKey(hit, "min", 20);
+            assertKey(hit, "mean", 30.0);
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
-    public void testMeter() {
-        Meter meter = registry.meter(name("foo", "bar"));
-        meter.mark(10);
-        meter.mark(20);
-        reportAndRefresh();
+    public void testMeter() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            Meter meter = registry.meter(name("foo", "bar"));
+            meter.mark(10);
+            meter.mark(20);
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "name", prefix + ".foo.bar");
-        assertKey(hit, "count", 30);
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "name", prefix + ".foo.bar");
+            assertKey(hit, "count", 30);
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
     public void testTimer() throws Exception {
-        Timer timer = registry.timer(name("foo", "bar"));
-        Timer.Context timerContext = timer.time();
-        Thread.sleep(200);
-        timerContext.stop();
-        reportAndRefresh();
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            Timer timer = registry.timer(name("foo", "bar"));
+            Timer.Context timerContext = timer.time();
+            Thread.sleep(200);
+            timerContext.stop();
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "name", prefix + ".foo.bar");
-        assertKey(hit, "count", 1);
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "name", prefix + ".foo.bar");
+            assertKey(hit, "count", 1);
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
-    public void testGauge() {
-        registry.register(name("foo", "bar"), (Gauge<Integer>) () -> 1234);
-        reportAndRefresh();
+    public void testGauge() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            registry.register(name("foo", "bar"), (Gauge<Integer>) () -> 1234);
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "name", prefix + ".foo.bar");
-        assertKey(hit, "value", 1234);
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "name", prefix + ".foo.bar");
+            assertKey(hit, "value", 1234);
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
-    public void nullGaugeShouldBeReported() {
-        registry.register(name("foo", "bar"), (Gauge<Integer>) () -> null);
-        reportAndRefresh();
+    public void nullGaugeShouldBeReported() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            registry.register(name("foo", "bar"), (Gauge<Integer>) () -> null);
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "name", prefix + ".foo.bar");
-        assertNullKey(hit, "value");
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "name", prefix + ".foo.bar");
+            assertNullKey(hit, "value");
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
-    public void failingGaugeShouldIndexTheError() {
-        registry.register(name("foo", "failing"), (Gauge<Integer>) () -> {
-            throw new RuntimeException("oups");
-        });
+    public void failingGaugeShouldIndexTheError() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            registry.register(name("foo", "failing"), (Gauge<Integer>) () -> {
+                throw new RuntimeException("oups");
+            });
 
-        reportAndRefresh();
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertTimestamp(hit);
-        assertKey(hit, "name", prefix + ".foo.failing");
-        assertKey(hit, "error", "java.lang.RuntimeException: oups");
-        assertKey(hit, "host", "localhost");
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertTimestamp(hit);
+            assertKey(hit, "name", prefix + ".foo.failing");
+            assertKey(hit, "error", "java.lang.RuntimeException: oups");
+            assertKey(hit, "host", "localhost");
+        }
     }
 
     @Test
     public void testThatSpecifyingSeveralHostsWork() throws Exception {
-        elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000", "localhost:" + getPortOfRunningNode()).build();
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000", "localhost:" + getPortOfRunningNode()).build()) {
 
-        registry.counter(name("test", "cache-evictions")).inc();
-        reportAndRefresh();
+            registry.counter(name("test", "cache-evictions")).inc();
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
+        }
     }
 
     @Test
     public void testGracefulFailureIfNoHostIsReachable() throws IOException {
-        // if no exception is thrown during the test, we consider it all graceful, as we connected to a dead host
-        elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000").build();
-        registry.counter(name("test", "cache-evictions")).inc();
-        elasticsearchReporter.report();
-    }
-
-    @Test
-    public void testThatBulkIndexingWorks() {
-        for (int i = 0; i < 2020; i++) {
-            Counter evictions = registry.counter(name("foo", "bar", String.valueOf(i)));
-            evictions.inc(i);
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().hosts("localhost:10000").build()) {
+            // if no exception is thrown during the test, we consider it all graceful, as we connected to a dead host
+            registry.counter(name("test", "cache-evictions")).inc();
+            elasticsearchReporter.report();
         }
-        reportAndRefresh();
-
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(2020L));
     }
 
     @Test
-    public void testThatPercolationNotificationWorks() throws IOException {
+    public void testThatBulkIndexingWorks() throws InterruptedException, IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            for (int i = 0; i < 2020; i++) {
+                Counter evictions = registry.counter(name("foo", "bar", String.valueOf(i)));
+                evictions.inc(i);
+            }
+            reportAndRefresh(elasticsearchReporter);
+
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(2020L));
+        }
+    }
+
+    @Test
+    public void testThatPercolationNotificationWorks() throws IOException, InterruptedException {
         SimpleNotifier notifier = new SimpleNotifier();
-
         MetricFilter percolationFilter = (name, metric) -> name.startsWith(prefix + ".foo");
-        elasticsearchReporter = createElasticsearchReporterBuilder()
-                .percolationFilter(percolationFilter)
-                .percolationNotifier(notifier)
-                .build();
 
-        Counter evictions = registry.counter("foo");
-        evictions.inc(18);
-        reportAndRefresh();
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder()
+            .percolationFilter(percolationFilter)
+            .percolationNotifier(notifier)
+            .build()) {
 
-        QueryBuilder queryBuilder = QueryBuilders.boolQuery()
+            Counter evictions = registry.counter("foo");
+            evictions.inc(18);
+            reportAndRefresh(elasticsearchReporter);
+
+            QueryBuilder queryBuilder = QueryBuilders.boolQuery()
                 .must(QueryBuilders.matchAllQuery())
                 .filter(
-                        QueryBuilders.boolQuery()
-                                .must(QueryBuilders.rangeQuery("count").gte(20))
-                                .must(QueryBuilders.termQuery("name", prefix + ".foo"))
+                    QueryBuilders.boolQuery()
+                        .must(QueryBuilders.rangeQuery("count").gte(20))
+                        .must(QueryBuilders.termQuery("name", prefix + ".foo"))
                 );
-        String json = String.format("{ \"query\" : %s }", queryBuilder.buildAsBytes().toUtf8());
-        client().prepareIndex(indexWithDate, ".percolator", "myName").setRefresh(true).setSource(json).execute().actionGet();
+            String json = String.format("{ \"query\" : %s }", queryBuilder.buildAsBytes().toUtf8());
+            try {
+                client().prepareIndex(indexWithDate, ".percolator", "myName").setRefresh(true).setSource(json).execute().actionGet(TIMEOUT);
+            } catch (ElasticsearchTimeoutException e) {
+                //ignore, there is a lot of time where the document is inserted but the futur never complete
+            }
+            evictions.inc(1);
+            reportAndRefresh(elasticsearchReporter);
+            assertThat(notifier.metrics.size(), is(0));
 
-        evictions.inc(1);
-        reportAndRefresh();
-        assertThat(notifier.metrics.size(), is(0));
+            evictions.inc(2);
+            reportAndRefresh(elasticsearchReporter);
+            assertThat(notifier.metrics.size(), is(1));
+            assertThat(notifier.metrics, hasKey("myName"));
+            assertThat(notifier.metrics.get("myName").name(), is(prefix + ".foo"));
 
-        evictions.inc(2);
-        reportAndRefresh();
-        assertThat(notifier.metrics.size(), is(1));
-        assertThat(notifier.metrics, hasKey("myName"));
-        assertThat(notifier.metrics.get("myName").name(), is(prefix + ".foo"));
-
-        notifier.metrics.clear();
-        evictions.dec(2);
-        reportAndRefresh();
-        assertThat(notifier.metrics.size(), is(0));
+            notifier.metrics.clear();
+            evictions.dec(2);
+            reportAndRefresh(elasticsearchReporter);
+            assertThat(notifier.metrics.size(), is(0));
+        }
     }
 
     @Test
     public void testThatWronglyConfiguredHostDoesNotLeadToApplicationStop() throws IOException {
-        createElasticsearchReporterBuilder().hosts("dafuq/1234").build();
-        elasticsearchReporter.report();
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().hosts("dafuq/1234").build()) {
+            elasticsearchReporter.report();
+        }
     }
 
     @Test
     public void testThatTimestampFieldnameCanBeConfigured() throws Exception {
-        elasticsearchReporter = createElasticsearchReporterBuilder().timestampFieldname("myTimeStampField").build();
-        registry.counter(name("myMetrics", "cache-evictions")).inc();
-        reportAndRefresh();
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().timestampFieldname("myTimeStampField").build()) {
+            registry.counter(name("myMetrics", "cache-evictions")).inc();
+            reportAndRefresh(elasticsearchReporter);
 
-        SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet();
-        assertThat(searchResponse.getHits().totalHits(), is(1L));
+            SearchResponse searchResponse = client().prepareSearch(indexWithDate).setTypes("metrics").execute().actionGet(TIMEOUT);
+            assertThat(searchResponse.getHits().totalHits(), is(1L));
 
-        Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
-        assertThat(hit, hasKey("myTimeStampField"));
+            Map<String, Object> hit = searchResponse.getHits().getAt(0).sourceAsMap();
+            assertThat(hit, hasKey("myTimeStampField"));
+        }
     }
 
     @Test // issue #6
-    public void testThatEmptyMetricsDoNotResultInBrokenBulkRequest() {
-        long connectionsBeforeReporting = getTotalHttpConnections();
-        elasticsearchReporter.report();
-        long connectionsAfterReporting = getTotalHttpConnections();
+    public void testThatEmptyMetricsDoNotResultInBrokenBulkRequest() throws IOException {
+        try (ElasticsearchReporter elasticsearchReporter = createElasticsearchReporterBuilder().build()) {
+            long connectionsBeforeReporting = getTotalHttpConnections();
+            elasticsearchReporter.report();
+            long connectionsAfterReporting = getTotalHttpConnections();
 
-        assertThat(connectionsAfterReporting, is(connectionsBeforeReporting));
+            assertThat(connectionsAfterReporting, is(connectionsBeforeReporting));
+        }
     }
 
     private long getTotalHttpConnections() {
-        NodesStatsResponse nodeStats = client().admin().cluster().prepareNodesStats().setHttp(true).get();
+        NodesStatsResponse nodeStats = client().admin().cluster().prepareNodesStats().setHttp(true).get(TIMEOUT);
         int totalOpenConnections = 0;
         for (NodeStats stats : nodeStats.getNodes()) {
             totalOpenConnections += stats.getHttp().getTotalOpen();
@@ -386,9 +413,10 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         }
     }
 
-    private void reportAndRefresh() {
+    private void reportAndRefresh(ElasticsearchReporter elasticsearchReporter) throws InterruptedException {
         elasticsearchReporter.report();
-        client().admin().indices().prepareRefresh(indexWithDate).execute().actionGet();
+        Thread.sleep(500);
+        client().admin().indices().prepareRefresh(indexWithDate).execute().actionGet(TIMEOUT);
     }
 
     private void assertKey(Map<String, Object> hit, String key, double value) {
@@ -427,12 +455,12 @@ public class ElasticsearchReporterTest extends ESIntegTestCase {
         Map<String, Object> additionalFields = new HashMap<>();
         additionalFields.put("host", "localhost");
         return ElasticsearchReporter.forRegistry(registry)
-                .hosts("localhost:" + getPortOfRunningNode())
-                .prefixedWith(prefix)
-                .convertRatesTo(TimeUnit.SECONDS)
-                .convertDurationsTo(TimeUnit.MILLISECONDS)
-                .filter(MetricFilter.ALL)
-                .index(index)
-                .additionalFields(additionalFields);
+            .hosts("localhost:" + getPortOfRunningNode())
+            .prefixedWith(prefix)
+            .convertRatesTo(TimeUnit.SECONDS)
+            .convertDurationsTo(TimeUnit.MILLISECONDS)
+            .filter(MetricFilter.ALL)
+            .index(index)
+            .additionalFields(additionalFields);
     }
 }
